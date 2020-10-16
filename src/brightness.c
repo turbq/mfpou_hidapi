@@ -29,7 +29,8 @@ int main(int argc, char *argv[])
 
 	// Open the device using the VID, PID,
 	// and optionally the Serial number.
-	handle = hid_open(0x03eb, 0x2402, NULL);
+	// handle = hid_open(0x03eb, 0x2402, NULL);
+	handle = hid_open_path("/dev/hidraw2");
 	if(!handle) {
 		printf("unable to open device\n");
 		return 1;
