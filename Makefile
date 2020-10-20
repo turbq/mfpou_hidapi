@@ -8,9 +8,9 @@ SRC := $(wildcard $(SRC_DIR)/*.c)
 
 OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
-INCLUDES := `pkg-config hidapi-hidraw --cflags` `pkg-config libusb --cflags`
+INCLUDES := `pkg-config hidapi-hidraw --cflags` `pkg-config libusb-1.0 --cflags`
 CPPFLAGS := $(INCLUDES) -Iinclude -MMD -MP # -I is a preprocessor flag, not a compiler flag
-CFLAGS   := -Wall -g -fpic     
+CFLAGS   := -Wall -g -fpic
 LDFLAGS  := -Wall -g 			# -Llib
 LDLIBS   := `pkg-config libudev --libs` -lhidapi-hidraw
 
@@ -23,7 +23,7 @@ all: $(EXE)
 libs: libhidapi-hidraw.so
 
 $(EXE): $(OBJ) | $(BIN_DIR)
-	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@ 
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
