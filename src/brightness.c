@@ -1,21 +1,45 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <wchar.h>
-#include <string.h>
-#include <stdint.h>
+/* Linux */
+#include <linux/types.h>
+#include <linux/input.h>
+#include <linux/hidraw.h>
 
-#include "hidapi.h"
+/*
+ * Ugly hack to work around failing compilation on systems that don't
+ * yet populate new version of hidraw.h to userspace.
+ */
+#ifndef HIDIOCSFEATURE
+#warning Please have your distro update the userspace kernel headers
+#define HIDIOCSFEATURE(len)    _IOC(_IOC_WRITE|_IOC_READ, 'H', 0x06, len)
+#define HIDIOCGFEATURE(len)    _IOC(_IOC_WRITE|_IOC_READ, 'H', 0x07, len)
+#endif
+
+/* Unix */
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+/* C */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <errno.h>
 
 #define VENDOR_ID ((unsigned short) 0x03eb)
 #define PRODUCT_ID ((unsigned short) 0x2402)
+#define PATH_SZ 15
 
 int main(int argc, char *argv[])
 {
-    int res;
-	unsigned char buf[65];
-	hid_device *handle;
-    struct hid_device_info *devs, *cur_dev;
-    char *mtouch_path;
+	int fd;
+	int i, res, desc_size = 0;
+	char buf[256];
+	struct hidraw_report_descriptor rpt_desc;
+	struct hidraw_devinfo info;
+	char *hidraw = "/dev/hidraw";
+	char path[PATH_SZ];
 
 	if(argc!=2){
 		printf("no argument\n");
@@ -23,63 +47,73 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	uint8_t brightness = atoi(argv[1]);
+	memset(&rpt_desc, 0x0, sizeof(rpt_desc));
+	memset(&info, 0x0, sizeof(info));
+	memset(buf, 0x0, sizeof(buf));
 
-	// Initialize the hidapi library
-	res = hid_init();
-	if (res)
-		return -1;
-    devs = hid_enumerate(VENDOR_ID, PRODUCT_ID);
-    if(devs == NULL){
-		printf("Devices with type: %04hx:%04hx not found\n", VENDOR_ID, PRODUCT_ID);
-        return -1;
-    }
-	cur_dev = devs;
-	while (cur_dev) {
-        if((cur_dev->vendor_id == VENDOR_ID)&&(cur_dev->product_id == PRODUCT_ID)&&(cur_dev->interface_number == 3)){
-            printf("Device Found\n  type: %04hx:%04hx\n  path: %s\n  serial_number: %ls", cur_dev->vendor_id, cur_dev->product_id, cur_dev->path, cur_dev->serial_number);
-            printf("\n");
-            printf("  Manufacturer: %ls\n", cur_dev->manufacturer_string);
-            printf("  Product:      %ls\n", cur_dev->product_string);
-            printf("  Release:      %hx\n", cur_dev->release_number);
-            printf("  Interface:    %d\n",  cur_dev->interface_number);
-            printf("  Usage (page): 0x%hx (0x%hx)\n", cur_dev->usage, cur_dev->usage_page);
-            printf("\n");
-            mtouch_path = malloc(sizeof(cur_dev->path));
-            if(mtouch_path == NULL)
-                return -1;
-            strcpy(mtouch_path, cur_dev->path);
-        }
-		cur_dev = cur_dev->next;
-	}
-	hid_free_enumeration(devs);
+	for (i=0; i<20; i++){
+		snprintf(path, PATH_SZ, "%s%d", hidraw, i);
+		fd = open(path, O_RDWR|O_NONBLOCK);
 
-	// Open the device using the VID, PID,
-	// and optionally the Serial number.
-    handle = hid_open_path(mtouch_path);
-    free(mtouch_path);
-	if(!handle) {
-		printf("unable to open device\n");
-		return 1;
+		if (fd < 0) {
+			perror("Unable to open device");
+			return 1;
+		}
+
+		/* Get Raw Info */
+		res = ioctl(fd, HIDIOCGRAWINFO, &info);
+		if (res < 0) {
+			perror("HIDIOCGRAWINFO");
+		}	
+		
+		/* Check if its mfpou */
+		if ((info.vendor == VENDOR_ID) & (info.product == PRODUCT_ID)){
+			/* Get Report Descriptor Size */
+			res = ioctl(fd, HIDIOCGRDESCSIZE, &desc_size);
+			if (res < 0)
+				perror("HIDIOCGRDESCSIZE");
+			/* Check for touchscreen desc */
+			if (desc_size < 120){
+				close(fd);
+			} else {
+				printf("mfpou touch found\n");
+				break;
+			}
+		} else {
+			close(fd);
+		}
 	}
 
-	memset(buf,0x00,sizeof(buf));
 
-	buf[0] = 0x4;
+
+	/* Get Raw Name */
+	res = ioctl(fd, HIDIOCGRAWNAME(256), buf);
+	if (res < 0)
+		perror("HIDIOCGRAWNAME");
+	else
+		printf("Raw Name: %s\n", buf);
+
+	/* Get Physical Location */
+	res = ioctl(fd, HIDIOCGRAWPHYS(256), buf);
+	if (res < 0)
+		perror("HIDIOCGRAWPHYS");
+	else
+		printf("Raw Phys: %s\n", buf);
+
+	/* Send a Report to the Device */
+	buf[0] = 0x4; /* Report Number */
 	buf[1] = brightness;
+	res = write(fd, buf, 2);
+	if (res < 0) {
+		printf("Error: %d\n", errno);
+		perror("write");
+	} else {
+		printf("write() wrote %d bytes\n", res);
+		printf("brightness set %d \n", brightness);
+	}
 
-	printf("writing %d to device\n",brightness);
-
-	res = hid_write(handle, buf, 2);
-	if (res < 0){
-		printf("Unable to write()\n");
-		printf("hid error: %ls\n", hid_error(handle));
-	}	
-    printf("success\n");
-	// Close the device
-	hid_close(handle);
-
-	// Finalize the hidapi library
-	res = hid_exit();
-
+	close(fd);
 	return 0;
+
 }
+
