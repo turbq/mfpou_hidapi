@@ -47,6 +47,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	uint8_t brightness = atoi(argv[1]);
+	brightness = brightness > 100 ? 100 : brightness;
 	memset(&rpt_desc, 0x0, sizeof(rpt_desc));
 	memset(&info, 0x0, sizeof(info));
 	memset(buf, 0x0, sizeof(buf));
@@ -102,7 +103,7 @@ int main(int argc, char *argv[])
 
 	/* Send a Report to the Device */
 	buf[0] = 0x4; /* Report Number */
-	buf[1] = brightness > 100 ? 100 : brightness;
+	buf[1] = brightness;
 	res = write(fd, buf, 2);
 	if (res < 0) {
 		printf("Error: %d\n", errno);
