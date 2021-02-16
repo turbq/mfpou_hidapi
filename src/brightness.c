@@ -27,8 +27,8 @@
 #include <stdint.h>
 #include <errno.h>
 
-#define VENDOR_ID ((unsigned short) 0x03eb)
-#define PRODUCT_ID ((unsigned short) 0x2402)
+#define VENDOR_ID ((unsigned short) 0xadca)
+#define PRODUCT_ID ((unsigned short) 0x8000)
 #define PATH_SZ 15
 
 int main(int argc, char *argv[])
@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 		}	
 		
 		/* Check if its mfpou */
-		if ((info.vendor == VENDOR_ID) & (info.product == PRODUCT_ID)){
+		if (((unsigned short)info.vendor == VENDOR_ID) & ((unsigned short)info.product == PRODUCT_ID)){
 			/* Get Report Descriptor Size */
 			res = ioctl(fd, HIDIOCGRDESCSIZE, &desc_size);
 			if (res < 0)
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 			if (desc_size < 120){
 				close(fd);
 			} else {
-				printf("mfpou touch found\n");
+				//printf("mfpou touch found\n");
 				break;
 			}
 		} else {
