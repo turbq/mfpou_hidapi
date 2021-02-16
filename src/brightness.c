@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 
 	/* Send a Report to the Device */
 	buf[0] = 0x4; /* Report Number */
-	buf[1] = brightness;
+	buf[1] = brightness > 100 ? 100 : brightness;
 	res = write(fd, buf, 2);
 	if (res < 0) {
 		printf("Error: %d\n", errno);
